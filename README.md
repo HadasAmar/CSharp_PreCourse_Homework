@@ -125,3 +125,81 @@ export const DrawerPanel: React.FC<DrawerProps> = ({ height, isMaximized, onResi
     </Drawer>
   );
 };
+
+
+To fix the "Iframe mouse-hijacking" issue, we need to implement two primary defense layers: a Drag Overlay (a transparent shield) and CSS pointer-events management.
+
+Here are the exact changes required.
+
+1. Update DrawerPanel.tsx
+You need to pass the resize events from the Ant Design Drawer to your parent component.
+
+TypeScript
+interface DrawerProps {
+  height: string | number;
+  isMaximized: boolean;
+  onResize: (size: number) => void;
+  onResizeStart?: () => void; // Added
+  onResizeEnd?: () => void;   // Added
+  onToggle: () => void;
+}
+
+export const DrawerPanel: React.FC<DrawerProps> = ({ 
+  height, isMaximized, onResize, onResizeStart, onResizeEnd, onToggle 
+}) => {
+  return (
+    <Drawer
+      // ... other props
+      resizable={{ onResize, onResizeStart, onResizeEnd }} // Pass events here
+      // ...
+    >
+      {/* ... */}
+    </Drawer>
+  );
+};
+2. Update App.tsx (The Logic & CSS)
+Use a state variable to toggle the "shield" when dragging occurs.
+
+TypeScript
+export default function App() {
+  const [isDragging, setIsDragging] = useState(false); // State to track dragging
+
+  return (
+    <div className="main-70-container">
+      <style>{`
+        /* 1. Transparent shield to block mouse events from reaching the iframe */
+        .drag-overlay { 
+          position: absolute; top: 0; left: 0; right: 0; bottom: 0; 
+          z-index: 999; background: transparent; cursor: row-resize; 
+        }
+        
+        /* 2. Optional: Disable pointer events on iframe for extra safety */
+        .is-dragging iframe { pointer-events: none; }
+        
+        .text-area-scrollable { flex: 1; overflow-y: auto; }
+      `}</style>
+
+      {/* Show the shield only while dragging */}
+      {isDragging && <div className="drag-overlay" />}
+
+      <div className={`text-area-scrollable ${isDragging ? 'is-dragging' : ''}`}>
+        <iframe 
+          src="your-pdf-url.pdf" 
+          style={{ width: '100%', height: '600px' }} 
+        />
+      </div>
+
+      <DrawerPanel 
+        // ...
+        onResizeStart={() => setIsDragging(true)} // Activate shield
+        onResizeEnd={() => setIsDragging(false)}   // Deactivate shield
+      />
+    </div>
+  );
+}
+Why this works:
+isDragging State: This is the "brain" of the operation. It knows exactly when the user has clicked and held the drawer handle.
+
+drag-overlay: This is a transparent div placed on top of everything (z-index: 999). When you drag, the mouse interacts with this invisible layer instead of the iframe. Since it’s transparent, the user doesn't notice it.
+
+pointer-events: none: This CSS rule is an extra layer of security. It tells the browser, "Ignore any mouse clicks or hovers on the iframe." This ensures that even if the mouse somehow slips under the overlay, the iframe will remain "deaf" to the mouse until the drag is finished.
